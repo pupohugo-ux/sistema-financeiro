@@ -31,7 +31,7 @@ function SidebarButton({ label, active, onClick }) {
     <button
       onClick={onClick}
       className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
-        active ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 hover:bg-slate-100'
+        active ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'
       }`}
     >
       {label}
@@ -42,10 +42,10 @@ function SidebarButton({ label, active, onClick }) {
 function Input({ label, ...props }) {
   return (
     <label className="block space-y-1.5">
-      {label ? <span className="text-sm font-medium text-slate-900">{label}</span> : null}
+      {label ? <span className="text-sm font-medium text-slate-700">{label}</span> : null}
       <input
         {...props}
-        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
       />
     </label>
   );
@@ -54,9 +54,9 @@ function Input({ label, ...props }) {
 function Select({ label, children, ...props }) {
   return (
     <label className="block space-y-1.5">
-      {label ? <span className="text-sm font-medium text-slate-900">{label}</span> : null}
+      {label ? <span className="text-sm font-medium text-slate-700">{label}</span> : null}
       <select
-        {...props}className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+        {...props}
         className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
       >
         {children}
@@ -68,7 +68,7 @@ function Select({ label, children, ...props }) {
 function StatCard({ label, value }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-sm text-slate-900">{label}</p>
+      <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
     </div>
   );
@@ -81,7 +81,7 @@ function Table({ columns, rows, renderRow, emptyMessage = 'Nenhum registro encon
         <thead>
           <tr>
             {columns.map((col) => (
-              <th key={col} className="border-b border-slate-200 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-900">
+              <th key={col} className="border-b border-slate-200 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {col}
               </th>
             ))}
@@ -92,7 +92,7 @@ function Table({ columns, rows, renderRow, emptyMessage = 'Nenhum registro encon
             rows.map(renderRow)
           ) : (
             <tr>
-              <td colSpan={columns.length} className="px-3 py-6 text-sm text-slate-900">
+              <td colSpan={columns.length} className="px-3 py-6 text-sm text-slate-500">
                 {emptyMessage}
               </td>
             </tr>
@@ -116,12 +116,14 @@ export default function Page() {
 
   const [empresas, setEmpresas] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [contasBancarias, setContasBancarias] = useState([]);
   const [contas, setContas] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
 
   const [empresaForm, setEmpresaForm] = useState({ nome: '', cnpj: '' });
   const [fornecedorForm, setFornecedorForm] = useState({ nome: '', cnpj: '', categoria: '' });
+  const [categoriaForm, setCategoriaForm] = useState({ nome: '', tipo: 'Fixo' });
   const [contaBancariaForm, setContaBancariaForm] = useState({ empresa_id: '', banco: '', agencia: '', conta: '', descricao: '' });
   const [contaForm, setContaForm] = useState({ empresa_id: '', fornecedor_id: '', descricao: '', categoria: '', centro_custo: '', vencimento: '', valor: '' });
   const [pagamentoForm, setPagamentoForm] = useState({ conta_id: '', conta_pagamento_id: '', data: '', forma: 'PIX', valor: '' });
@@ -130,9 +132,10 @@ export default function Page() {
     if (!supabase) return;
     setLoading(true);
 
-    const [empresasRes, fornecedoresRes, contasBancariasRes, contasRes, pagamentosRes] = await Promise.all([
+    const [empresasRes, fornecedoresRes, categoriasRes, contasBancariasRes, contasRes, pagamentosRes] = await Promise.all([
       supabase.from('empresas').select('*').order('id', { ascending: true }),
       supabase.from('fornecedores').select('*').order('id', { ascending: true }),
+      supabase.from('categorias_gastos').select('*').order('id', { ascending: true }),
       supabase.from('contas_bancarias').select('*').order('id', { ascending: true }),
       supabase.from('contas_pagar').select('*').order('id', { ascending: true }),
       supabase.from('pagamentos').select('*').order('id', { ascending: true }),
@@ -140,6 +143,7 @@ export default function Page() {
 
     setEmpresas(empresasRes.data || []);
     setFornecedores(fornecedoresRes.data || []);
+    setCategorias(categoriasRes.data || []);
     setContasBancarias(contasBancariasRes.data || []);
     setContas(contasRes.data || []);
     setPagamentos(pagamentosRes.data || []);
@@ -193,6 +197,34 @@ export default function Page() {
     };
   }, [contas, empresaFiltro]);
 
+  const gastosPorCategoria = useMemo(() => {
+    const base = empresaFiltro === 'todas' ? contas : contas.filter((c) => String(c.empresa_id) === empresaFiltro);
+    const mapa = {};
+    base.forEach((item) => {
+      const chave = item.categoria || 'Sem categoria';
+      mapa[chave] = (mapa[chave] || 0) + Number(item.valor || 0);
+    });
+    return Object.entries(mapa)
+      .map(([categoria, valor]) => ({ categoria, valor }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [contas, empresaFiltro]);
+
+  const mediaMensalPorCategoria = useMemo(() => {
+    const base = empresaFiltro === 'todas' ? contas : contas.filter((c) => String(c.empresa_id) === empresaFiltro);
+    const mapa = {};
+    base.forEach((item) => {
+      const categoria = item.categoria || 'Sem categoria';
+      const mes = String(item.vencimento || '').slice(0, 7) || 'Sem mês';
+      if (!mapa[categoria]) mapa[categoria] = {};
+      mapa[categoria][mes] = (mapa[categoria][mes] || 0) + Number(item.valor || 0);
+    });
+    return Object.entries(mapa).map(([categoria, meses]) => {
+      const valores = Object.values(meses);
+      const media = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : 0;
+      return { categoria, media, meses: valores.length };
+    }).sort((a, b) => b.media - a.media);
+  }, [contas, empresaFiltro]);
+
   async function handleLogin(e) {
     e.preventDefault();
     setAuthError('');
@@ -237,6 +269,15 @@ export default function Page() {
     e.preventDefault();
     await salvarRegistro('fornecedores', [fornecedorForm], () => {
       setFornecedorForm({ nome: '', cnpj: '', categoria: '' });
+    });
+  }
+
+  async function salvarCategoria(e) {
+    e.preventDefault();
+    await salvarRegistro('categorias_gastos', [{ nome: categoriaForm.nome, tipo: categoriaForm.tipo }], () => {
+      setCategoriaForm({ nome: '', tipo: 'Fixo' });
+    });
+  });
     });
   }
 
@@ -329,7 +370,7 @@ export default function Page() {
           <div className="mb-6">
             <p className="text-sm uppercase tracking-[0.25em] text-slate-400">Contas a Pagar</p>
             <h1 className="mt-2 text-3xl font-bold text-slate-900">Entrar no sistema</h1>
-            <p className="mt-2 text-sm text-slate-900">Use o e-mail e a senha criados no Supabase.</p>
+            <p className="mt-2 text-sm text-slate-500">Use o e-mail e a senha criados no Supabase.</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <Input label="E-mail" type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required placeholder="voce@empresa.com" />
@@ -345,22 +386,23 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 text-slate-900 md:p-6">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[260px_1fr]">
         <aside className="h-fit space-y-3 rounded-[32px] border border-slate-200 bg-slate-50 p-4 shadow-sm xl:sticky xl:top-6">
           <div className="rounded-3xl bg-white p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Sistema</p>
             <h1 className="mt-2 text-xl font-bold text-slate-900">Contas a Pagar</h1>
-            <p className="mt-1 text-sm text-slate-900">Multiempresa · Supabase + Vercel</p>
+            <p className="mt-1 text-sm text-slate-500">Multiempresa · Supabase + Vercel</p>
           </div>
 
           <SidebarButton label="Dashboard" active={pagina === 'dashboard'} onClick={() => setPagina('dashboard')} />
           <SidebarButton label="Empresas / CNPJs" active={pagina === 'empresas'} onClick={() => setPagina('empresas')} />
           <SidebarButton label="Fornecedores" active={pagina === 'fornecedores'} onClick={() => setPagina('fornecedores')} />
+          <SidebarButton label="Categorias" active={pagina === 'categorias'} onClick={() => setPagina('categorias')} />
           <SidebarButton label="Contas a Pagar" active={pagina === 'contas'} onClick={() => setPagina('contas')} />
           <SidebarButton label="Pagamentos" active={pagina === 'pagamentos'} onClick={() => setPagina('pagamentos')} />
 
-          <button onClick={handleLogout} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-medium text-slate-900 hover:bg-slate-100">
+          <button onClick={handleLogout} className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100">
             Sair
           </button>
         </aside>
@@ -369,7 +411,7 @@ export default function Page() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-3xl font-bold text-slate-900">Painel financeiro</h2>
-              <p className="mt-1 text-sm text-slate-900">Sistema conectado ao Supabase, pronto para deploy no Vercel.</p>
+              <p className="mt-1 text-sm text-slate-500">Sistema conectado ao Supabase, pronto para deploy no Vercel.</p>
             </div>
             <div className="flex flex-col gap-3 md:flex-row">
               <input
@@ -400,6 +442,35 @@ export default function Page() {
                 <StatCard label="Vencido" value={formatMoney(stats.vencido)} />
                 <StatCard label="Pago" value={formatMoney(stats.pago)} />
                 <StatCard label="Pendentes" value={String(stats.pendentes)} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <Card title="Gastos por categoria">
+                  <Table
+                    columns={['Categoria', 'Total acumulado']}
+                    rows={gastosPorCategoria}
+                    renderRow={(item) => (
+                      <tr key={item.categoria}>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{item.categoria}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{formatMoney(item.valor)}</td>
+                      </tr>
+                    )}
+                  />
+                </Card>
+
+                <Card title="Média mensal por categoria">
+                  <Table
+                    columns={['Categoria', 'Média por mês', 'Meses lançados']}
+                    rows={mediaMensalPorCategoria}
+                    renderRow={(item) => (
+                      <tr key={item.categoria}>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{item.categoria}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{formatMoney(item.media)}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{item.meses}</td>
+                      </tr>
+                    )}
+                  />
+                </Card>
               </div>
 
               <Card title="Próximas contas">
@@ -458,9 +529,9 @@ export default function Page() {
                     rows={fornecedores}
                     renderRow={(fornecedor) => (
                       <tr key={fornecedor.id}>
-                        <td className="border-b border-slate-100 px-3 py-3 text-sm">{fornecedor.nome}</td>
-                        <td className="border-b border-slate-100 px-3 py-3 text-sm">{fornecedor.cnpj}</td>
-                        <td className="border-b border-slate-100 px-3 py-3 text-sm">{fornecedor.categoria}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{fornecedor.nome}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{fornecedor.cnpj}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{fornecedor.categoria}</td>
                       </tr>
                     )}
                   />
@@ -470,9 +541,43 @@ export default function Page() {
                 <form onSubmit={salvarFornecedor} className="space-y-4">
                   <Input label="Nome" value={fornecedorForm.nome} onChange={(e) => setFornecedorForm((prev) => ({ ...prev, nome: e.target.value }))} required />
                   <Input label="CNPJ" value={fornecedorForm.cnpj} onChange={(e) => setFornecedorForm((prev) => ({ ...prev, cnpj: e.target.value }))} />
-                  <Input label="Categoria" value={fornecedorForm.categoria} onChange={(e) => setFornecedorForm((prev) => ({ ...prev, categoria: e.target.value }))} />
+                  <Select label="Categoria padrão" value={fornecedorForm.categoria} onChange={(e) => setFornecedorForm((prev) => ({ ...prev, categoria: e.target.value }))}>
+                    <option value="">Selecione</option>
+                    {categorias.map((categoria) => <option key={categoria.id} value={categoria.nome}>{categoria.nome}</option>)}
+                  </Select>
                   <button disabled={salvando} className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
                     Salvar fornecedor
+                  </button>
+                </form>
+              </Card>
+            </div>
+          ) : null}
+
+          {pagina === 'categorias' ? (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <div className="xl:col-span-2">
+                <Card title="Categorias de gastos">
+                  <Table
+                    columns={['Categoria', 'Tipo']}
+                    rows={categorias}
+                    renderRow={(categoria) => (
+                      <tr key={categoria.id}>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{categoria.nome}</td>
+                        <td className="border-b border-slate-100 px-3 py-3 text-sm text-slate-900">{categoria.tipo || '-'}</td>
+                      </tr>
+                    )}
+                  />
+                </Card>
+              </div>
+              <Card title="Nova categoria">
+                <form onSubmit={salvarCategoria} className="space-y-4">
+                  <Input label="Nome da categoria" value={categoriaForm.nome} onChange={(e) => setCategoriaForm((prev) => ({ ...prev, nome: e.target.value }))} required />
+                  <Select label="Tipo" value={categoriaForm.tipo} onChange={(e) => setCategoriaForm((prev) => ({ ...prev, tipo: e.target.value }))}>
+                    <option value="Fixo">Fixo</option>
+                    <option value="Variável">Variável</option>
+                  </Select>
+                  <button disabled={salvando} className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                    Salvar categoria
                   </button>
                 </form>
               </Card>
@@ -511,7 +616,10 @@ export default function Page() {
                     {fornecedores.map((fornecedor) => <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nome}</option>)}
                   </Select>
                   <Input label="Descrição" value={contaForm.descricao} onChange={(e) => setContaForm((prev) => ({ ...prev, descricao: e.target.value }))} required />
-                  <Input label="Categoria" value={contaForm.categoria} onChange={(e) => setContaForm((prev) => ({ ...prev, categoria: e.target.value }))} />
+                  <Select label="Categoria" value={contaForm.categoria} onChange={(e) => setContaForm((prev) => ({ ...prev, categoria: e.target.value }))}>
+                    <option value="">Selecione</option>
+                    {categorias.map((categoria) => <option key={categoria.id} value={categoria.nome}>{categoria.nome}</option>)}
+                  </Select>
                   <Input label="Centro de custo" value={contaForm.centro_custo} onChange={(e) => setContaForm((prev) => ({ ...prev, centro_custo: e.target.value }))} />
                   <Input label="Vencimento" type="date" value={contaForm.vencimento} onChange={(e) => setContaForm((prev) => ({ ...prev, vencimento: e.target.value }))} required />
                   <Input label="Valor" type="number" step="0.01" value={contaForm.valor} onChange={(e) => setContaForm((prev) => ({ ...prev, valor: e.target.value }))} required />
